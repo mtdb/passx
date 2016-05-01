@@ -1,0 +1,328 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import os
+import random
+import re
+import shutil
+import stat
+import string
+import subprocess
+import sys
+import yaml
+
+PASS = '/usr/bin/pass'
+
+COMMANDS = ['init', 'ls', 'find', 'show', 'grep', 'insert', 'edit', 'append',
+            'generate', 'rm', 'mv', 'cp', 'git', 'help', 'version']
+
+STRING = 'string'
+FILE = 'file'
+INTEGER = 'integer'
+
+PASSX_START_DELIMITER = '⊥'
+PASSX_END_DELIMITER = '⊤'
+
+FILES_FOLDER = 'Files'
+
+copy = False
+arguments = sys.argv
+
+if '-c' in arguments:
+    copy = True
+    arguments.remove('-c')
+
+if len(arguments) == 1:
+    COMMAND = 'ls'
+    arguments = []
+
+elif arguments[1] not in COMMANDS:
+    COMMAND = 'show'
+    arguments = arguments[1:]
+
+else:
+    COMMAND = arguments[1]
+    arguments = arguments[2:]
+
+
+def yesno(msg, affirmative=False):
+    options = '  [Y/n]' if affirmative else '  [y/N]'
+    return raw_input(msg + options) in ['yes', 'Y', 'y'] or affirmative
+
+
+def generate_random_file_name():
+    return ''.join(random.SystemRandom().choice(
+                   string.ascii_uppercase + string.digits) for _ in range(8))
+
+
+def is_file(value):
+    # see `generate_random_file_name` to make the re
+    return re.match('^{}/[A-Z0-9]{}$'.format(FILES_FOLDER, '{8}'), str(value))
+
+
+def get_type(value, match_fs=True):
+    type = STRING
+    if re.match(r'^[0-9]+$', value):
+        type = INTEGER
+    elif re.match('^/(.+)/([^/]+)$', value) and match_fs:
+        type = FILE
+    return type
+
+
+def usage():
+    command = re.match('^/.+/(?P<name>[a-zA-Z]+)$', sys.argv[0])
+    print("""
+Passx extension usage:
+    {0} append pass-name key-name [value|file-path]
+        Add a new key/value pair in the passx document
+    {0} [show] [-c] pass-name key-name
+        Show existing key and optionally put it on the clipboard.
+        If the key value is a file then it opens following the mailcap rules
+        http://linux.die.net/man/4/mailcap
+    {0} edit pass-name key-name
+        Edit an existing key.""".format(command.group('name')))
+
+
+class Passx(object):
+    """Manage Passx documents inside gpg encrypted files"""
+
+    def __init__(self, pass_name, gpg_bin='gpg2',
+                 store_dir='~/.password-store'):
+        self.pass_name = pass_name
+        self.gpg_bin = gpg_bin
+        self.store_dir = os.path.normpath(os.path.expanduser(store_dir))
+
+        with open(os.path.join(self.store_dir, '.gpg-id'), 'r') as gpg_id:
+            self.gpg_id = gpg_id.read().replace('\n', '')
+
+    def __extract_passx_data__(self, data):
+        passx_block = re.findall('{}(.*){}'.format(PASSX_START_DELIMITER,
+                                                   PASSX_END_DELIMITER),
+                                 data, re.DOTALL)
+        if not passx_block:
+            return {}
+        return yaml.load(passx_block[0].lstrip())
+
+    def __get_secure_dir__(self):
+        if os.access('/dev/shm', os.W_OK):
+            tmp_file_path = '/dev/shm/passx-edit.XXX'
+        else:
+            noshm = ('Your system does not have /dev/shm, which means that'
+                     ' it may\nbe difficult to entirely erase the temporary '
+                     'non-encrypted password file after editing.\n\n'
+                     'Are you sure you would like to continue?')
+            use_tmp_dir = yesno(noshm)
+            if use_tmp_dir:
+                tmp_file_path = '/tmp/passx-edit.XXX'
+            else:
+                raise Exception('NoTemporaryDirectory')
+
+        mktemp = subprocess.Popen(['mktemp', '-d', tmp_file_path],
+                                  stdout=subprocess.PIPE)
+
+        secure_dir, err = mktemp.communicate()
+        return secure_dir.rstrip()
+
+    def _git_enabled(self):
+        """Check if a git repository is initialized in the storage directory"""
+        with open('/dev/null', 'w') as null:
+
+            p1 = subprocess.Popen([PASS, 'git', 'status'],
+                                  stdout=null,
+                                  stderr=subprocess.PIPE)
+
+            output, err = p1.communicate()
+            return 'not a git repository' not in err
+
+    def _read_key(self):
+        """Read and decrypt the key file using native pass command."""
+        with open('/dev/null', 'w') as null:
+            p1 = subprocess.Popen([PASS, 'show', self.pass_name],
+                                  stdout=subprocess.PIPE,
+                                  stderr=null)
+
+            secrets, err = p1.communicate()
+            return secrets
+
+    def _write_key(self, data):
+        """Encrypt and write the key file using native pass command."""
+        secure_dir = self.__get_secure_dir__()
+        secret_path = os.path.join(secure_dir, 'secret')
+
+        passx_env = os.environ
+        passx_env['EDITOR'] = 'cp {}'.format(secret_path)
+
+        secret = open(secret_path, 'w')
+        secret.write(data)
+        secret.close()
+
+        with open('/dev/null', 'w') as null:
+            p1 = subprocess.Popen([PASS, 'edit', self.pass_name],
+                                  env=passx_env,
+                                  stdout=subprocess.PIPE,
+                                  stderr=null)
+
+            out, err = p1.communicate()
+            print(out)
+
+        shutil.rmtree(secure_dir)
+
+    def _encrypt_file(self, file):
+        """Encrypt and store a file in FILES_FOLDER."""
+        file_name = generate_random_file_name()
+        files_dir = os.path.join(self.store_dir, FILES_FOLDER)
+        if not os.path.exists(files_dir):
+            os.makedirs(files_dir)
+
+        output_file = os.path.join(files_dir, '{}.gpg'.format(file_name))
+        cmd = [self.gpg_bin, '--encrypt', '--recipient', self.gpg_id,
+               '--batch', '--yes', '--output',  output_file, file]
+        subprocess.call(cmd)
+
+        pass_path = '{}/{}'.format(FILES_FOLDER, file_name)
+
+        return (output_file, pass_path)
+
+    def _decrypt_file(self, path):
+        """Decrypt the file in a secret path."""
+        secure_dir = self.__get_secure_dir__()
+        secret_path = os.path.join(secure_dir, 'secret')
+
+        subprocess.call([self.gpg_bin, '--quiet', '--batch', '--armor',
+                         '--output', secret_path, '--decrypt', path])
+        return secret_path
+
+    def get(self, key, default=None):
+        """Show the value of an existing key in the passx document"""
+        secret = self._read_key()
+        passxdoc = self.__extract_passx_data__(secret)
+
+        if not passxdoc:
+            return ('Error: There are currently no Passx document '
+                    'in the key file provided')
+
+        value = passxdoc.get(key, default)
+        return value
+
+    def set(self, key, value, type=STRING, warning=True):
+        """Assign a value to the key in the passx document"""
+        secret = self._read_key()
+        passxdoc = self.__extract_passx_data__(secret)
+
+        if not passxdoc:
+            # create new passx doc
+            passxdoc = {}
+            secret += '{}{}\n'.format(PASSX_START_DELIMITER,
+                                      PASSX_END_DELIMITER)
+        elif key in passxdoc and warning:
+            replace_key = yesno('This key exists in the document, '
+                                'would you replace it?', True)
+            if not replace_key:
+                return
+
+        if type == INTEGER:
+            value = int(value)
+        elif type == FILE:
+            if os.path.isfile(value):
+                file_path, pass_path = self._encrypt_file(value)
+                rm_source = yesno('You want to delete the source file?')
+                if rm_source:
+                    os.remove(value)
+                value = pass_path
+            else:
+                raise Exception('FileNotFoundError')
+
+            if key in passxdoc:
+                os.remove(os.path.join(self.store_dir,
+                                       '{}.gpg'.format(passxdoc[key])))
+
+            if self._git_enabled():
+                p1 = subprocess.Popen([PASS, 'git', 'add', '-A'],
+                                      stdout=subprocess.PIPE)
+
+                out, err = p1.communicate()
+                print(out)
+
+        if type == STRING and '\\n' in value:
+            value = '>\\n' + value
+
+        passxdoc[key] = value
+
+        pretty_doc = yaml.dump(passxdoc, default_flow_style=False)
+        new_passxdoc = '{}\n{}{}'.format(PASSX_START_DELIMITER,
+                                         pretty_doc,
+                                         PASSX_END_DELIMITER)
+
+        new_secret = re.sub('{}.*{}'.format(PASSX_START_DELIMITER,
+                                            PASSX_END_DELIMITER),
+                            new_passxdoc,
+                            secret, flags=re.DOTALL)
+
+        self._write_key(new_secret.rstrip() + '\n')
+
+
+if COMMAND == 'append':
+    if len(arguments) < 2:
+        usage()
+        exit()
+    elif len(arguments) == 2:
+        pass_name, key = arguments
+        value = raw_input('write the vaue for `{}`: '.format(key))
+    else:
+        pass_name, key, value = arguments[0:3]
+        if arguments[3:]:
+            print('warning, parameters {} ommited'.format(
+                ', '.join(arguments[3:])))
+
+    passx = Passx(pass_name)
+    type = get_type(value)
+
+    if type == FILE:
+        attach_file = yesno('This looks like a system path, you '
+                            'want try to attach the file?', True)
+        if not attach_file:
+            type = STRING
+
+    passx.set(key, value, type=type)
+
+elif COMMAND == 'show' and len(arguments) == 2:
+    pass_name, key = arguments
+    passx = Passx(pass_name)
+    value = passx.get(key)
+
+    if is_file(value):
+        encrypted_file = os.path.join(passx.store_dir, '{}.gpg'.format(value))
+        secret_path = passx._decrypt_file(encrypted_file)
+
+        os.chmod(secret_path, stat.S_IREAD)
+        subprocess.call(['see', secret_path])
+        os.remove(secret_path)
+        value = ''
+
+    if copy:
+        os.system('echo "{}" | xclip -selection clipboard'.format(value))
+    else:
+        print(value)
+
+elif COMMAND == 'edit' and len(arguments) == 2:
+    pass_name, key = arguments
+    passx = Passx(pass_name)
+    value = passx.get(key)
+
+    if value is None:
+        print('{} is not in {} document'.format(key, pass_name))
+    elif is_file(value):
+        raise NotImplementedError()
+    else:
+        value = raw_input('write the vaue for `{}`: '.format(key))
+        type = get_type(value, match_fs=False)
+        passx.set(key, value, type=type, warning=False)
+
+elif COMMAND in ['show', 'edit'] and len(arguments) > 2:
+    usage()
+elif COMMAND == 'help':
+    subprocess.call([PASS] + ['help'])
+    usage()
+else:
+    opt = ['-c'] if copy else []
+    subprocess.call([PASS] + [COMMAND] + opt + arguments)
