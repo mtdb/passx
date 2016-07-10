@@ -25,48 +25,73 @@ PassX is an extension for [pass](https://www.passwordstore.org/) the standard un
 #### Example output
 
 ```
-i7@i7-desktop ~ » pass init D3000000
-mkdir: created directory ‘/home/i7/.password-store/’
-Password store initialized for D3000000
-i7@i7-desktop ~ » pass insert Bank/One
-mkdir: created directory ‘/home/i7/.password-store/Bank’
-Enter password for Bank/One: 
-Retype password for Bank/One: 
-i7@i7-desktop ~ » pass
-Password Store
-└── Bank
-    └── One
-i7@i7-desktop ~ » pass show Bank/One 
-123456
-i7@i7-desktop ~ » pass append Bank/One number
-write the vaue for `number`: 123456789
-i7@i7-desktop ~ » pass append Bank/One cvv 123
-i7@i7-desktop ~ » pass show Bank/One 
-123456
-⊥
-cvv: 123
-number: 123456789
-⊤
-i7@i7-desktop ~ » pass show Bank/One number
-123456789
-i7@i7-desktop ~ » pass -c Bank/One number
-i7@i7-desktop ~ » pass append Bank/One avatar /home/i7/avatar.png
-This looks like a system path, you want try to attach the file?  [Y/n]
-You want to delete the source file?  [y/N]
-i7@i7-desktop ~ » pass
-Password Store
-├── Bank
-│   └── One
-└── Files
-    └── 6SDDITBP
-i7@i7-desktop ~ » pass show Bank/One
-123456
-⊥
-avatar: Files/6SDDITBP
-cvv: 123
-number: 123456789
-⊤
-i7@i7-desktop ~ » pass show Bank/One avatar
+Initialize password store
+        i7@i7-desktop ~ » pass init D3000000
+        mkdir: created directory ‘/home/i7/.password-store/’
+        Password store initialized for D3000000
+
+Add password to store
+        i7@i7-desktop ~ » pass insert Bank/One
+        mkdir: created directory ‘/home/i7/.password-store/Bank’
+        Enter password for Bank/One: 
+        Retype password for Bank/One: 
+
+List existing documents in store
+        i7@i7-desktop ~ » pass
+        Password Store
+        └── Bank
+            └── One
+
+Show existing document
+        i7@i7-desktop ~ » pass show Bank/One 
+        123456
+
+Add a field called number to store
+        i7@i7-desktop ~ » pass append Bank/One number
+        write the vaue for `number`: 123456789
+
+Add a field called cvv to store and assign 123
+        i7@i7-desktop ~ » pass append Bank/One cvv 123
+
+Show existing document
+        i7@i7-desktop ~ » pass show Bank/One 
+        123456
+        ⊥
+        cvv: 123
+        number: 123456789
+        ⊤
+
+Show specific document field
+        i7@i7-desktop ~ » pass show Bank/One number
+        123456789
+
+Copy existing field to clipboard
+        i7@i7-desktop ~ » pass -c Bank/One number
+
+Attach a file to the document
+        i7@i7-desktop ~ » pass append Bank/One avatar /home/i7/avatar.png
+        This looks like a system path, you want try to attach the file?  [Y/n]
+        You want to delete the source file?  [y/N]
+
+List existing documents in store
+        i7@i7-desktop ~ » pass
+        Password Store
+        ├── Bank
+        │   └── One
+        └── Files
+            └── 6SDDITBP
+
+Show existing document
+        i7@i7-desktop ~ » pass show Bank/One
+        123456
+        ⊥
+        avatar: Files/6SDDITBP
+        cvv: 123
+        number: 123456789
+        ⊤
+
+Show attached file
+        i7@i7-desktop ~ » pass show Bank/One avatar
 ```
 
 When you try to show a file this makes following the mailcap rules.
@@ -80,19 +105,26 @@ In order to read time based OTPs you need install **pyotp** (`sudo pip instal py
 #### Example
 
 ```
-i7@i7-desktop ~ » pass append Bank/One otp
-write the vaue for `otp`: base32secret3232
-i7@i7-desktop ~ » pass show Bank/One otp
-456123
-i7@i7-desktop ~ » pass show Bank/One
-123456
-⊥
-cvv: 123
-number: 123456789
-otp: base32secret3232
-⊤
-i7@i7-desktop ~ » pass show Bank/One otp
-789456
+Add a field called otp to store
+        i7@i7-desktop ~ » pass append Bank/One otp
+        write the vaue for `otp`: BASE32SECRET3232
+
+Show current TOTP
+        i7@i7-desktop ~ » pass show Bank/One otp
+        456123
+
+Show existing document
+        i7@i7-desktop ~ » pass show Bank/One
+        123456
+        ⊥
+        cvv: 123
+        number: 123456789
+        otp: BASE32SECRET3232
+        ⊤
+
+Show current TOTP
+        i7@i7-desktop ~ » pass show Bank/One otp
+        789456
 ```
 
 ### Installation
