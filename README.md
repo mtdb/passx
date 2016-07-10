@@ -75,7 +75,7 @@ The idea is to have an valid yaml document within a `⊥` and `⊤` delimiters, 
 
 ### TOTP support
 
-In order to read time based OTPs you need install **pyotp** (`sudo pip instal pyotp`) and the script will try to read the base32 secret from any field named **otp** in your passx document
+In order to read time based OTPs you need install **pyotp** (`sudo pip instal pyotp`) and the script will try to read the base32 secret from any field named **otp** in your passx document.
 
 #### Example
 
