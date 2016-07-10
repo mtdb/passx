@@ -11,6 +11,11 @@ import subprocess
 import sys
 import yaml
 
+try:
+    import pyotp
+except ImportError:
+    pyotp = False
+
 PASS = '/usr/bin/pass'
 
 COMMANDS = ['init', 'ls', 'find', 'show', 'grep', 'insert', 'edit', 'append',
@@ -289,6 +294,8 @@ elif COMMAND == 'show' and len(arguments) == 2:
     pass_name, key = arguments
     passx = Passx(pass_name)
     value = passx.get(key)
+    if pyotp and key == 'otp':
+        value = pyotp.TOTP(value).now()
 
     if is_file(value):
         encrypted_file = os.path.join(passx.store_dir, '{}.gpg'.format(value))

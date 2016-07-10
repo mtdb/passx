@@ -7,6 +7,7 @@ PassX is an extension for [pass](https://www.passwordstore.org/) the standard un
   - Support multiple fields per password file
   - Copy option for fields (not only for the master key)
   - Support for file attachments
+  - Support for TOTP
 
 ### Ussage
 
@@ -71,6 +72,28 @@ i7@i7-desktop ~ » pass show Bank/One avatar
 When you try to show a file this makes following the mailcap rules.
 
 The idea is to have an valid yaml document within a `⊥` and `⊤` delimiters, is not relevant the content out of them, then you can edit the document with your editor following the yaml rules inside the delimiters or write without rules outside them.
+
+### TOTP support
+
+In order to read time based OTPs you need install **pyotp** (`sudo pip instal pyotp`) and the script will try to read the base32 secret from any field named **otp** in your passx document
+
+#### Example
+
+```
+i7@i7-desktop ~ » pass append Bank/One otp
+write the vaue for `otp`: base32secret3232
+i7@i7-desktop ~ » pass show Bank/One otp
+456123
+i7@i7-desktop ~ » pass show Bank/One
+123456
+⊥
+cvv: 123
+number: 123456789
+otp: base32secret3232
+⊤
+i7@i7-desktop ~ » pass show Bank/One otp
+789456
+```
 
 ### Installation
 
