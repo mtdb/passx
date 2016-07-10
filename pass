@@ -307,7 +307,7 @@ elif COMMAND == 'show' and len(arguments) == 2:
         value = ''
 
     if copy:
-        os.system('echo "{}" | xclip -selection clipboard'.format(value))
+        os.system('echo -n "{}" | xclip -selection clipboard'.format(value))
     else:
         print(value)
 
