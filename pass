@@ -52,7 +52,9 @@ else:
 
 def yesno(msg, affirmative=False):
     options = '  [Y/n]' if affirmative else '  [y/N]'
-    return raw_input(msg + options) in ['yes', 'Y', 'y'] or affirmative
+    answer = raw_input(msg + options)
+    return (answer not in ['no', 'N', 'n'] if affirmative
+            else answer in ['yes', 'Y', 'y'])
 
 
 def generate_random_file_name():
