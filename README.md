@@ -1,3 +1,5 @@
+**ATTENTION:** This project is no longer actively maintained in favor of [pass-meta](https://github.com/individuo7/pass-meta) and the native pass extension support.
+
 # PassX
 
 PassX is an extension for [pass](https://www.passwordstore.org/) the standard unix password manager.
